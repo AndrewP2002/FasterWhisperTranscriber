@@ -86,40 +86,49 @@ public class WhisperAPIClient {
                                                          boolean translate, String targetLanguage) {
         //List to hold all parts of the body (headers + binary data + footers)
         List<byte[]> byteArrays = new ArrayList<>();
-        //Separator with newLine
-        byte[] Separator = ("--" + BOUNDARY + "\r\n").getBytes(StandardCharsets.UTF_8);
+        //separator with newLine
+        byte[] separator = ("--" + BOUNDARY + "\r\n").getBytes(StandardCharsets.UTF_8);
         byte[] newLine = "\r\n".getBytes(StandardCharsets.UTF_8);
+
         //Add File
-        byteArrays.add(Separator);
+        byteArrays.add(separator);
         String fileHeader = "Content-Disposition: form-data; name=\"file\"; filename=\"" + fileName + "\"\r\n" +
                 "Content-Type: application/octet-stream\r\n\r\n";
         byteArrays.add(fileHeader.getBytes(StandardCharsets.UTF_8));
         byteArrays.add(fileContent); // ВАЖЛИВО: додаємо "сирі" байти файлу без конвертації в String
         byteArrays.add(newLine);
+
         //Add Language Field
-        addTextField(byteArrays, "language", sourceLanguage, Separator, newLine);
+        addTextField(byteArrays, "language", sourceLanguage, separator, newLine);
+
         // Add Model Field
-        addTextField(byteArrays, "model", model, Separator, newLine);
+        addTextField(byteArrays, "model", model, separator, newLine);
+
         //Add Translate check
-        addTextField(byteArrays, "translate", translate ? "true" : "false", Separator, newLine);
+        addTextField(byteArrays, "translate", translate ? "true" : "false", separator, newLine);
+
         //Add Target Language (if needed)
         if (translate && targetLanguage != null) {
-            addTextField(byteArrays, "target_language", targetLanguage, Separator, newLine);
+            addTextField(byteArrays, "target_language", targetLanguage, separator, newLine);
         }
+
         //Final Boundary
         byteArrays.add(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
         //Compile all byte arrays into a single BodyPublisher
         return HttpRequest.BodyPublishers.ofByteArrays(byteArrays);
     }
+
     //Helper method to add simple text fields
     private void addTextField(List<byte[]> byteArrays, String name, String value,
-                              byte[] Separator, byte[] newLine) {
-        byteArrays.add(Separator);
+                              byte[] separator, byte[] newLine) {
+        byteArrays.add(separator);
         String header = "Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n";
         byteArrays.add(header.getBytes(StandardCharsets.UTF_8));
         byteArrays.add(value.getBytes(StandardCharsets.UTF_8));
         byteArrays.add(newLine);
     }
+
     /**
      * Parse the API response and create a TranscriptionResponse object
      * @param response The HTTP response from the server

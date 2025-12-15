@@ -8,6 +8,7 @@ def translate_srt(created_srt, target_language):
     #convert the srt file into a list
     with open(created_srt,'r',encoding='utf-8') as f:
         subtitles_content = list(srt.parse(f.read()))
+
     #go through every sentence of the srt file and translate it
     for sub in subtitles_content:
         response = ollama.chat(model=model, messages=[
@@ -20,9 +21,10 @@ def translate_srt(created_srt, target_language):
                 'content': sub.content
             },
         ])
+        
         #replace the original sentecne with the translated one
-        sub.content = sub.content.replace(sub.content, response['message']['content'])
-    return(srt.compose(subtitles_content))
+        sub.content = response['message']['content']
+    return srt.compose(subtitles_content)
     
     
        
