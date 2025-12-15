@@ -1,73 +1,80 @@
 package com.transcription;
-
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.File;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Scanner;
 
-
 public class Main {
-    public static void main(String[] args) throws URISyntaxException, IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         Scanner scanner = new Scanner(System.in);
-        File file = new File("src/main/resources/Faster-Whisper-XXL/faster-whisper-xxl.exe");
-        List<String> CommandInput = new ArrayList<>();
-        String Whisper = file.getAbsolutePath();
-        CommandInput.add(Whisper);
-        System.out.println("Input folder:");
-        String MainFolder = scanner.nextLine();
-        System.out.println("Input file name:");
-        CommandInput.add(MainFolder+scanner.nextLine());
-        System.out.println("Input Language:");
-        CommandInput.add("--language " + scanner.nextLine());
-        System.out.println("Input Model:");
-        CommandInput.add("--model " + scanner.nextLine());
-        String temp="";
-        for(String ln :CommandInput){
-            temp=temp.concat(ln+" ");
-        }
-        temp = temp.concat("--output_dir source");
+        //server url
+        String serverUrl = "http://localhost:8080";
+        WhisperAPIClient apiClient = new WhisperAPIClient(serverUrl);
         try {
-            // Command to execute (e.g., list files in current directory)
-            String command = "cmd.exe /c " + temp;
-            Process process = Runtime.getRuntime().exec(command);
-            // Read the output of the command
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+            System.out.println("Starting transcription:");
+            System.out.println();
+            //Get input folder path
+            System.out.print("Enter folder path (e.g., /path/to/folder/): ");
+            String mainFolder = scanner.nextLine();
+            //Validate that the folder exists
+            if (!Files.exists(Paths.get(mainFolder))) {
+                System.err.println("ERROR: Folder does not exist: " + mainFolder);
+                return;
             }
-            // Check for any errors
-            BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-            while ((line = errorReader.readLine()) != null) {
-                System.err.println(line);
+            //Get audio file name
+            System.out.print("Enter audio file name (e.g., audio.mp3): ");
+            String fileName = scanner.nextLine();
+            String filePath = mainFolder + (mainFolder.endsWith("/") ? "" : "/") + fileName;
+            //Validate that the file exists
+            if (!Files.exists(Paths.get(filePath))) {
+                System.err.println("ERROR: File does not exist: " + filePath);
+                return;
             }
-            // Wait for the process to complete and get the exit code
-            int exitCode = process.waitFor();
-            System.out.println("Command exited with code: " + exitCode);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        System.out.println("Would you like to Translate to another language? y/n");
-        String Translate = scanner.nextLine();
-        if(Translate.equalsIgnoreCase("y")){
-            System.out.println("Input the Language");
-            String Language = scanner.nextLine();
-            File folder = new File(MainFolder.substring(0,MainFolder.length()-1));
-            // Get all .srt files
-            File[] srtFiles = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".srt"));
-            if (srtFiles != null) {
-                //if there are srt files translate them one by one
-                for (File srt : srtFiles) {
-                    String SrtTemp = srt.toString();
-                    OllamaTranslator.translateSubtitleFile(SrtTemp,
-                            SrtTemp.substring(0,SrtTemp.length()-4).concat("_translated.srt"),
-                            Language);
+            //Get language of the audio
+            System.out.print("Enter source language (e.g., en, uk, fr): ");
+            String sourceLanguage = scanner.nextLine();
+            //Get the model to use
+            System.out.print("Enter model (e.g., base, small, medium, large): ");
+            String model = scanner.nextLine();
+            //Ask if translation is needed
+            System.out.print("Do you want to translate the transcription? (y/n): ");
+            String translateResponse = scanner.nextLine();
+            boolean needsTranslation = translateResponse.equalsIgnoreCase("y");
+            String targetLanguage = null;
+            if (needsTranslation) {
+                System.out.print("Enter target language for translation (e.g., en, uk, fr): ");
+                targetLanguage = scanner.nextLine();
+            }
+            //Call the API
+            System.out.println("\nSending request to server...");
+            TranscriptionResponse response = apiClient.transcribeAudio(
+                    filePath,
+                    sourceLanguage,
+                    model,
+                    needsTranslation,
+                    targetLanguage
+            );
+            //Handle the response
+            if (response.isSuccess()) {
+                System.out.println("Transcription completed successfully!");
+                String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+                String originalSrtPath = mainFolder + "/" + baseName + ".srt";
+                Files.writeString(Paths.get(originalSrtPath), response.getSrtOriginal());
+                System.out.println("Original subtitles saved to: " + originalSrtPath);
+                //Save translated transcription if applicable
+                if (needsTranslation && response.getSrtTranslated() != null) {
+                    String translatedSrtPath = mainFolder+ "/" + baseName + "_translated.srt";
+                    Files.writeString(Paths.get(translatedSrtPath), response.getSrtTranslated());
+                    System.out.println("Translated subtitles saved to: " + translatedSrtPath);
                 }
+            } else {
+                System.err.println("\n✗ Error: " + response.getErrorMessage());
             }
+        } catch (Exception e) {
+            System.err.println("Fatal error: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            scanner.close();
         }
     }
 }
